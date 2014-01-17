@@ -22,9 +22,10 @@ var Target = (function () {
     var _this = this;
     EventEmitter.call(this);
     this.id = id;
-    this.rate = 1; // msg/s for this target
+    this.rate = 100; // msg/s for this target
     this.queue = [];
     this._resDelays = [];
+    this._resAverageLatency = 0;
     this._reqCount = 0;
 
     this.on('req', function () {
@@ -32,7 +33,7 @@ var Target = (function () {
     });
 
     this.on('res', function (date) {
-      _this._resDelays.push(now() - date);
+      _this._resDelays.push(date);
     });
 
     this.loop();
@@ -50,20 +51,29 @@ var Target = (function () {
 
     var loopIt = 0;
     setInterval(function () {
-      var lockedLoopIt = loopIt++;
+      var lockedLoopIt = ++loopIt;
 
       // compute the new rate every seconds
+
       var len = _this._resDelays.length;
-      if (len === 0) return;
-      var average = _.reduce(_this._resDelays, function (average, item) {
-        return average + item / len;
-      });
-      _this.rate = Math.floor(len * 1000 / average);
-      _this._resDelays = [];
-      _this._reqCount = 0;
+      if (len !== 0) {
+        var sum = _.reduce(_this._resDelays, function (sum, item) {
+          return sum + item;
+        });
+        _this._resAverageLatency = sum / len;
+        /*
+         * 1 msg <=> A ms = A/1000 s (average)
+         * X msg <=> 1 s  ==> x = 1/A/1000 = 1000/A
+         * Asynchronous model => we have to take care of parallelism => x = msgCount * x
+         * 3 msg : [50ms, 100ms, 150ms] => 1 msg : 100ms (average) but msg are processed in parallel => 3 msg ~ 100ms
+         */
+        _this.rate = Math.floor(len * 1000 / _this._resAverageLatency) || 1;
+        _this._resDelays = [];
+        _this._reqCount = 0;
+      }
 
       // flush queue (check that current sent count < rate to avoid dequeue-enqueue)
-      while (lockedLoopIt === loopIt && _this.isOpen()) {
+      while (lockedLoopIt === loopIt && _this.isOpen() && _this.queue.length > 0) {
         var msg = _this.queue.shift();
         exports.send(msg.from, msg.to, msg.content, msg.done);
       }
@@ -72,6 +82,13 @@ var Target = (function () {
 
   Target.prototype.isOpen = function () {
     return this._reqCount < this.rate;
+  };
+
+  Target.prototype.toString = function () {
+    return this.id + '> rate : ' + this.rate + ' msg/s\n' +
+      this._reqCount + ' items sent\n' +
+      this._resDelays.length + ' ack|timeout received (average : ' + this._resAverageLatency + ' ms)\n' +
+      this.queue.length + ' items in queue\n';
   };
 
   return Target;
@@ -95,17 +112,18 @@ exports.send = function (from, to, content, done) {
     target.emit('req');
     var date = now();
     hubiquitus.send(from, to, content, timeout, function (err) {
+      var time = now() - date;
       logger.trace('response from target', {target: target.id, err: err});
       if (err && err.code === 'TIMEOUT') {
         target.queue.push({from: from, to: to, content: content, done: done});
         target.emit('res', date);
       } else {
         done && done(err);
-        if (!err) target.emit('res', date);
+        if (!err) target.emit('res', time);
       }
     }, {safe: true});
   } else {
-    logger.trace('target not opened, queue message', {target: target.id});
+    logger.trace('target not opened, queue message', {target: target.id, rate: target.rate});
     target.queue.push({from: from, to: to, content: content, done: done});
   }
 };
