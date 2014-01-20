@@ -23,10 +23,12 @@ var Target = (function () {
     EventEmitter.call(this);
     this.id = id;
     this.rate = 100; // msg/s for this target
-    this.queue = [];
+    this._queue = [];
     this._resDelays = [];
     this._resAverageLatency = 0;
     this._reqCount = 0;
+    this._unqueuedCount = 0;
+    this._queuedCount = 0;
 
     this.on('req', function () {
       _this._reqCount++;
@@ -49,8 +51,12 @@ var Target = (function () {
   Target.prototype.loop = function () {
     var _this = this;
 
+    var begin = new Date().getTime();
     var loopIt = 0;
     setInterval(function () {
+      var end = new Date().getTime();
+      console.log('last exec : ' + (end - begin));
+      begin = end;
       var lockedLoopIt = ++loopIt;
 
       // compute the new rate every seconds
@@ -61,6 +67,7 @@ var Target = (function () {
           return sum + item;
         });
         _this._resAverageLatency = sum / len;
+        console.log(_this.toString());
         /*
          * 1 msg <=> A ms = A/1000 s (average)
          * X msg <=> 1 s  ==> x = 1/A/1000 = 1000/A
@@ -70,14 +77,33 @@ var Target = (function () {
         _this.rate = Math.floor(len * 1000 / _this._resAverageLatency) || 1;
         _this._resDelays = [];
         _this._reqCount = 0;
+        _this._unqueuedCount = 0;
+        _this._queuedCount = 0;
       }
 
       // flush queue (check that current sent count < rate to avoid dequeue-enqueue)
-      while (lockedLoopIt === loopIt && _this.isOpen() && _this.queue.length > 0) {
-        var msg = _this.queue.shift();
+      /*while (lockedLoopIt === loopIt && _this.isOpen() && _this._queue.length > 0) {
+        _this._unqueuedCount++;
+        var msg = _this._queue.shift();
         exports.send(msg.from, msg.to, msg.content, msg.done);
-      }
+      }*/
+
+      (function unqueue() {
+        if (lockedLoopIt === loopIt && _this.isOpen() && _this._queue.length > 0) {
+          setImmediate(function () {
+            _this._unqueuedCount++;
+            var msg = _this._queue.shift();
+            exports.send(msg.from, msg.to, msg.content, msg.done);
+            unqueue();
+          });
+        }
+      })();
     }, 1000);
+  };
+
+  Target.prototype.queue = function (item) {
+    this._queuedCount++;
+    this._queue.push(item);
   };
 
   Target.prototype.isOpen = function () {
@@ -86,9 +112,9 @@ var Target = (function () {
 
   Target.prototype.toString = function () {
     return this.id + '> rate : ' + this.rate + ' msg/s\n' +
-      this._reqCount + ' items sent\n' +
+      this._reqCount + ' items sent (' + this._unqueuedCount + ' from queue)\n' +
       this._resDelays.length + ' ack|timeout received (average : ' + this._resAverageLatency + ' ms)\n' +
-      this.queue.length + ' items in queue\n';
+      this._queue.length + ' items in queue (' + this._queuedCount + ' new)\n';
   };
 
   return Target;
@@ -115,7 +141,7 @@ exports.send = function (from, to, content, done) {
       var time = now() - date;
       logger.trace('response from target', {target: target.id, err: err});
       if (err && err.code === 'TIMEOUT') {
-        target.queue.push({from: from, to: to, content: content, done: done});
+        target.queue({from: from, to: to, content: content, done: done});
         target.emit('res', date);
       } else {
         done && done(err);
@@ -124,7 +150,7 @@ exports.send = function (from, to, content, done) {
     }, {safe: true});
   } else {
     logger.trace('target not opened, queue message', {target: target.id, rate: target.rate});
-    target.queue.push({from: from, to: to, content: content, done: done});
+    target.queue({from: from, to: to, content: content, done: done});
   }
 };
 
