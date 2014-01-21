@@ -51,10 +51,10 @@ var Target = (function () {
   Target.prototype.loop = function () {
     var _this = this;
 
-    var begin = new Date().getTime();
+    var begin = Date.now();
     var loopIt = 0;
     setInterval(function () {
-      var end = new Date().getTime();
+      var end = Date.now();
       console.log('last exec : ' + (end - begin));
       begin = end;
       var lockedLoopIt = ++loopIt;
@@ -80,13 +80,6 @@ var Target = (function () {
         _this._unqueuedCount = 0;
         _this._queuedCount = 0;
       }
-
-      // flush queue (check that current sent count < rate to avoid dequeue-enqueue)
-      /*while (lockedLoopIt === loopIt && _this.isOpen() && _this._queue.length > 0) {
-        _this._unqueuedCount++;
-        var msg = _this._queue.shift();
-        exports.send(msg.from, msg.to, msg.content, msg.done);
-      }*/
 
       (function unqueue() {
         if (lockedLoopIt === loopIt && _this.isOpen() && _this._queue.length > 0) {
@@ -136,9 +129,9 @@ exports.send = function (from, to, content, done) {
   if (target.isOpen()) {
     logger.trace('target opened, sending request', {target: target.id, rate: target.rate});
     target.emit('req');
-    var date = now();
+    var date = Date.now();
     hubiquitus.send(from, to, content, timeout, function (err) {
-      var time = now() - date;
+      var time = Date.now() - date;
       logger.trace('response from target', {target: target.id, err: err});
       if (err && err.code === 'TIMEOUT') {
         target.queue({from: from, to: to, content: content, done: done});
@@ -164,17 +157,9 @@ exports.middleware = function (type, req, next) {
   if (type !== 'req_in' || !req.headers.safe) return next();
 
   logger.trace('middleware processing request...', {req: req});
-  if (new Date().getTime() - req.date > req.timeout) {
+  if (Date.now() - req.date > req.timeout) {
     return logger.trace('timeout excedeed !', {req: req});
   }
   req.reply();
   next();
 };
-
-/**
- * Returns current timestamp
- * @returns {Number}
- */
-function now() {
-  return new Date().getTime();
-}
