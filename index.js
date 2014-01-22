@@ -4,7 +4,7 @@ var _ = require('lodash');
 var util = require('util');
 var EventEmitter = require('events').EventEmitter;
 
-const timeout = 2000;
+const timeout = 1000;
 
 var targets = {};
 
@@ -35,6 +35,8 @@ var Target = (function () {
     this.computingRate = 500;
     this.rate = this.computingRate;
     this._sent = 0;
+    this._ack = 0;
+    this._timeout = 0;
     this._queue = [];
     this._queueProcessIt = 0;
     this._queueOut = 0;
@@ -48,19 +50,23 @@ var Target = (function () {
 
   Target.prototype.notifyRes = function (time) {
     if (time >= timeout) {
-      this.computingRate -= 1;
+      this._timeout++;
+      this.computingRate -= this.rate/100;
     } else {
+      this._ack++;
       this.computingRate += 1;
     }
   };
 
   Target.prototype.updateRate = function () {
     this._sent = 0;
+    this._ack = 0;
+    this._timeout = 0;
     this._queueIn = 0;
     this._queueOutScheduled = 0;
     this._queueOut = 0;
     if (this.computingRate <= 0) this.computingRate = 1;
-    this.rate = this.computingRate;
+    this.rate = Math.floor(this.computingRate);
   };
 
   Target.prototype.isOpen = function () {
@@ -90,7 +96,7 @@ var Target = (function () {
 
   Target.prototype.toString = function () {
     return 'Target ' + this.id + '; rate : ' + this.rate + ' msg/s\n' +
-      '\t' + 'Messages sent : ' + this._sent + '\n' +
+      '\t' + 'Messages : ' + this._sent + ' sent; ' + this._ack + ' ack; ' + this._timeout + ' timeout\n' +
       '\t' + 'Queue : ' + this._queue.length + ' items '+
       '(' + this._queueIn + ' in; ' + this._queueOut + ' out / ' + this._queueOutScheduled + ' scheduled)\n' +
       '\t' + 'Computing rate : ' + this.computingRate;
