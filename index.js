@@ -9,6 +9,18 @@ const timeout = 2000;
 var targets = {};
 
 /**
+ * Update loop
+ */
+
+setInterval(function () {
+  _.forEach(targets, function (target) {
+    console.log(target.toString());
+    target.updateRate();
+    target.processQueue();
+  });
+}, 1000);
+
+/**
  * Target
  */
 var Target = (function () {
@@ -19,95 +31,69 @@ var Target = (function () {
    * @constructor
    */
   function Target(id) {
-    var _this = this;
-    EventEmitter.call(this);
     this.id = id;
-    this.rate = 100; // msg/s for this target
+    this.computingRate = 500;
+    this.rate = this.computingRate;
+    this._sent = 0;
     this._queue = [];
-    this._resDelays = [];
-    this._resAverageLatency = 0;
-    this._reqCount = 0;
-    this._unqueuedCount = 0;
-    this._queuedCount = 0;
-
-    this.on('req', function () {
-      _this._reqCount++;
-    });
-
-    this.on('res', function (date) {
-      _this._resDelays.push(date);
-    });
-
-    this.loop();
+    this._queueProcessIt = 0;
+    this._queueOut = 0;
+    this._queueOutScheduled = 0;
+    this._queueIn = 0;
   }
 
-  util.inherits(Target, EventEmitter);
-
-  /**
-   * Target internal loop : every seconds
-   * - Compute the new rate
-   * - Flush the queue util rate is reached
-   */
-  Target.prototype.loop = function () {
-    var _this = this;
-
-    var begin = Date.now();
-    var loopIt = 0;
-    setInterval(function () {
-      var end = Date.now();
-      console.log('last exec : ' + (end - begin));
-      begin = end;
-      var lockedLoopIt = ++loopIt;
-
-      // compute the new rate every seconds
-
-      var len = _this._resDelays.length;
-      if (len !== 0) {
-        var sum = _.reduce(_this._resDelays, function (sum, item) {
-          return sum + item;
-        });
-        _this._resAverageLatency = sum / len;
-        console.log(_this.toString());
-        /*
-         * 1 msg <=> A ms = A/1000 s (average)
-         * X msg <=> 1 s  ==> x = 1/A/1000 = 1000/A
-         * Asynchronous model => we have to take care of parallelism => x = msgCount * x
-         * 3 msg : [50ms, 100ms, 150ms] => 1 msg : 100ms (average) but msg are processed in parallel => 3 msg ~ 100ms
-         */
-        _this.rate = Math.floor(len * 1000 / _this._resAverageLatency) || 1;
-        _this._resDelays = [];
-        _this._reqCount = 0;
-        _this._unqueuedCount = 0;
-        _this._queuedCount = 0;
-      }
-
-      (function unqueue() {
-        if (lockedLoopIt === loopIt && _this.isOpen() && _this._queue.length > 0) {
-          setImmediate(function () {
-            _this._unqueuedCount++;
-            var msg = _this._queue.shift();
-            exports.send(msg.from, msg.to, msg.content, msg.done);
-            unqueue();
-          });
-        }
-      })();
-    }, 1000);
+  Target.prototype.notifyReq = function () {
+    this._sent++;
   };
 
-  Target.prototype.queue = function (item) {
-    this._queuedCount++;
-    this._queue.push(item);
+  Target.prototype.notifyRes = function (time) {
+    if (time >= timeout) {
+      this.computingRate -= 1;
+    } else {
+      this.computingRate += 1;
+    }
+  };
+
+  Target.prototype.updateRate = function () {
+    this._sent = 0;
+    this._queueIn = 0;
+    this._queueOutScheduled = 0;
+    this._queueOut = 0;
+    if (this.computingRate <= 0) this.computingRate = 1;
+    this.rate = this.computingRate;
   };
 
   Target.prototype.isOpen = function () {
-    return this._reqCount < this.rate;
+    return this._sent < this.rate;
+  };
+
+  Target.prototype.queue = function (item) {
+    this._queueIn++;
+    this._queue.push(item);
+  };
+
+  Target.prototype.processQueue = function () {
+    var currentIt = ++this._queueProcessIt;
+    var _this = this;
+    (function unqueue() {
+      if (_this._queue.length > 0 && _this.isOpen() && currentIt === _this._queueProcessIt) {
+        _this._queueOutScheduled++;
+        setImmediate(function () {
+          var item = _this._queue.shift();
+          _this._queueOut++;
+          exports.send(item.from, item.to, item.content, item.done);
+          unqueue();
+        });
+      }
+    })();
   };
 
   Target.prototype.toString = function () {
-    return this.id + '> rate : ' + this.rate + ' msg/s\n' +
-      this._reqCount + ' items sent (' + this._unqueuedCount + ' from queue)\n' +
-      this._resDelays.length + ' ack|timeout received (average : ' + this._resAverageLatency + ' ms)\n' +
-      this._queue.length + ' items in queue (' + this._queuedCount + ' new)\n';
+    return 'Target ' + this.id + '; rate : ' + this.rate + ' msg/s\n' +
+      '\t' + 'Messages sent : ' + this._sent + '\n' +
+      '\t' + 'Queue : ' + this._queue.length + ' items '+
+      '(' + this._queueIn + ' in; ' + this._queueOut + ' out / ' + this._queueOutScheduled + ' scheduled)\n' +
+      '\t' + 'Computing rate : ' + this.computingRate;
   };
 
   return Target;
@@ -128,17 +114,17 @@ exports.send = function (from, to, content, done) {
 
   if (target.isOpen()) {
     logger.trace('target opened, sending request', {target: target.id, rate: target.rate});
-    target.emit('req');
+    target.notifyReq();
     var date = Date.now();
     hubiquitus.send(from, to, content, timeout, function (err) {
       var time = Date.now() - date;
       logger.trace('response from target', {target: target.id, err: err});
       if (err && err.code === 'TIMEOUT') {
         target.queue({from: from, to: to, content: content, done: done});
-        target.emit('res', date);
+        target.notifyRes(time);
       } else {
         done && done(err);
-        if (!err) target.emit('res', time);
+        if (!err) target.notifyRes(time);
       }
     }, {safe: true});
   } else {
