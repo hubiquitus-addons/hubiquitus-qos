@@ -5,7 +5,11 @@
     "type": "git",
     "url": "https://git@github.com:hubiquitus-addons/hubiquitus-qos"
   },
+  "bin": {
+    "h-qos-batch": "./batch"
+  },
   "dependencies": {
+    "commander": "2.1.*",
     "hubiquitus-core": "0.8.*",
     "tv4": "1.0.11",
     "lodash": "2.4.*",

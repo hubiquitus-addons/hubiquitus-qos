@@ -31,7 +31,7 @@ exports.configure = function (_conf, done) {
   }
   _conf = _conf || {};
 
-   if (!tv4.validate(_conf, schemas.conf)) {
+  if (!tv4.validate(_conf, schemas.conf)) {
     return logger.warn('invalid configuration; use of default one', {conf: _conf, err: tv4.error, defaultConf: conf});
   }
 
@@ -78,9 +78,9 @@ exports.middleware = function (type, msg, next) {
   if (type === 'req_in' && msg.headers.safe) {
     middlewareSafeIn(msg, next);
   } else if (type === 'res_out' && msg.headers.safe) {
-    middlewareSafeOut(msg, next);
+    middlewareSafeOut(msg);
   } else if (type === 'req_in' && msg.headers.ping) {
-    middlewarePing(msg, next);
+    msg.reply();
   } else {
     next();
   }
@@ -93,8 +93,11 @@ function middlewareSafeIn(req, next) {
   }
 
   var collection = db.collection(conf.mongo.collection);
-  var reqToPersist = _.omit(req, 'reply');
-  collection.insert({date: Date.now(), req: reqToPersist}, {safe: true}, function (err, records) {
+  var toPersist = {
+    date: Date.now(),
+    req: _.omit(req, 'reply')
+  };
+  collection.insert(toPersist, {safe: true}, function (err, records) {
     if (err) {
       logger.trace('safe message queueing error, will not be processed !');
       req.reply({code: 'MONGOERR', message: 'couldnt queue message to process, stop processing'});
@@ -106,7 +109,7 @@ function middlewareSafeIn(req, next) {
   });
 }
 
-function middlewareSafeOut(res, next) {
+function middlewareSafeOut(res) {
   logger.trace('middleware processing response...', {res: res});
 
   var collection = db.collection(conf.mongo.collection);
@@ -116,8 +119,4 @@ function middlewareSafeOut(res, next) {
     }
   });
   delete res.headers.safeId;
-}
-
-function middlewarePing(req, next) {
-
 }
