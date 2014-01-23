@@ -63,7 +63,7 @@ exports.send = function (from, to, content, done) {
   logger.trace('send message with qos', {from: from, to: to, content: content, done: !!done});
 
   hubiquitus.send(from, to, content, conf.timeout, function (err) {
-    logger.trace('response from target', {target: target.id, err: err});
+    logger.trace('response from target', {target: to, err: err});
     done && done(err);
   }, {safe: true});
 };
@@ -71,12 +71,22 @@ exports.send = function (from, to, content, done) {
 /**
  * Middleware
  * @param {String} type
- * @param {Object} req
+ * @param {Object} msg
  * @param {Function} next
  */
-exports.middleware = function (type, req, next) {
-  if (type !== 'req_in' || !req.headers.safe) return next();
+exports.middleware = function (type, msg, next) {
+  if (type === 'req_in' && msg.headers.safe) {
+    middlewareSafeIn(msg, next);
+  } else if (type === 'res_out' && msg.headers.safe) {
+    middlewareSafeOut(msg, next);
+  } else if (type === 'req_in' && msg.headers.ping) {
+    middlewarePing(msg, next);
+  } else {
+    next();
+  }
+};
 
+function middlewareSafeIn(req, next) {
   logger.trace('middleware processing request...', {req: req});
   if (Date.now() - req.date > req.timeout) {
     return logger.trace('timeout excedeed !', {req: req});
@@ -84,13 +94,30 @@ exports.middleware = function (type, req, next) {
 
   var collection = db.collection(conf.mongo.collection);
   var reqToPersist = _.omit(req, 'reply');
-  collection.insert({date: Date.now(), req: reqToPersist}, {safe: true}, function (err) {
+  collection.insert({date: Date.now(), req: reqToPersist}, {safe: true}, function (err, records) {
     if (err) {
       logger.trace('safe message queueing error, will not be processed !');
       req.reply({code: 'MONGOERR', message: 'couldnt queue message to process, stop processing'});
     } else {
+      req.headers.safeId = records[0]._id;
       req.reply();
       next();
     }
   });
-};
+}
+
+function middlewareSafeOut(res, next) {
+  logger.trace('middleware processing response...', {res: res});
+
+  var collection = db.collection(conf.mongo.collection);
+  collection.remove({_id: res.headers.safeId}, function (err) {
+    if (err) {
+      logger.trace('safe message removal error', err);
+    }
+  });
+  delete res.headers.safeId;
+}
+
+function middlewarePing(req, next) {
+
+}
