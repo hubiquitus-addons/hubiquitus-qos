@@ -86,6 +86,12 @@ exports.middleware = function (type, msg, next) {
   }
 };
 
+/**
+ * Middlewares handling safed sent messages.
+ * Enqueues messages in mongo collection and sends an ACK.
+ * @param {Object} req
+ * @param {Function} next
+ */
 function middlewareSafeIn(req, next) {
   logger.trace('middleware processing request...', {req: req});
   if (Date.now() - req.date > req.timeout) {
@@ -109,6 +115,11 @@ function middlewareSafeIn(req, next) {
   });
 }
 
+/**
+ * Middleware handling safed sent messages after processing.
+ * Unqueue the processed message from the mongo collection.
+ * @param {Object} res
+ */
 function middlewareSafeOut(res) {
   logger.trace('middleware processing response...', {res: res});
 
