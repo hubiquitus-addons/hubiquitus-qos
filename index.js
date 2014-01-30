@@ -5,49 +5,51 @@ var logger = hubiquitus.logger('hubiquitus:addons:qos');
 var _ = require('lodash');
 var tv4 = require('tv4');
 var mongo = require('mongodb');
+var Target = require('./lib/target').Target;
 var schemas = require('./lib/schemas');
+var properties = require('./lib/properties');
 
-var conf = {
-  timeout: 2000,
-  mongo: {
-    host: '127.0.0.1',
-    port: mongo.Connection.DEFAULT_PORT,
-    dbname: 'qos',
-    collection: 'queue'
-  }
+var mongoConf = {
+  host: '127.0.0.1',
+  port: mongo.Connection.DEFAULT_PORT,
+  dbname: 'qos',
+  collection: 'queue'
 };
+
+var targets = {};
 
 var db = null;
 
 /**
  * QOS configuration
- * @param {Object|Function} _conf
+ * @param {Object|Function} conf
  * @param {Function} done
  */
-exports.configure = function (_conf, done) {
-  if (_.isFunction (_conf)) {
-    done = _conf;
-    _conf = {};
+exports.configure = function (conf, done) {
+  if (_.isFunction (conf)) {
+    done = conf;
+    conf = {};
   }
-  _conf = _conf || {};
+  conf = conf || {};
 
-  if (!tv4.validate(_conf, schemas.conf)) {
-    return logger.warn('invalid configuration; use of default one', {conf: _conf, err: tv4.error, defaultConf: conf});
+  if (!tv4.validate(conf, schemas.conf)) {
+    return logger.warn('invalid configuration; use of default one', {conf: conf, err: tv4.error, defaultConf: conf});
   }
 
-  _.assign(conf, _conf);
+  if (conf.mongo) _.assign(mongoConf, conf.mongo);
+  if (conf.timeout) properties.timeout = conf.timeout;
   logger.info('use configuration', {conf: conf});
 
   /* connection to the database */
-  var server = new mongo.Server(conf.mongo.host, conf.mongo.port, {auto_reconnect: true});
+  var server = new mongo.Server(mongoConf.host, mongoConf.port, {auto_reconnect: true});
   var client = new mongo.MongoClient(server);
   client.open(function (err, client) {
     if (err) {
-      var errid = logger.error('cant connect database', {conf: conf.mongo, err: err});
+      var errid = logger.error('cant connect database', {conf: mongoConf, err: err});
       return done && done({code: 'MONGOERR', errid: errid});
     }
-    logger.info('connected to database', {conf: conf.mongo});
-    db = client.db(conf.mongo.dbname);
+    logger.info('connected to database', {conf: mongoConf});
+    db = client.db(mongoConf.dbname);
     done && done();
   });
 };
@@ -62,10 +64,33 @@ exports.configure = function (_conf, done) {
 exports.send = function (from, to, content, done) {
   logger.trace('send message with qos', {from: from, to: to, content: content, done: !!done});
 
-  hubiquitus.send(from, to, content, conf.timeout, function (err) {
-    logger.trace('response from target', {target: to, err: err});
-    done && done(err);
-  }, {safe: true});
+  var bare = hubiquitus.utils.aid.bare(to);
+  var target = targets[bare];
+  if (!target) {
+    target = targets[bare] = new Target(bare);
+    target.debug = true;
+    target.on('processed', function (item) {
+      exports.send(item.from, item.to, item.content, item.done);
+    });
+  }
+
+  if (target.ok()) {
+    target.notifyReq();
+    var date = Date.now();
+    hubiquitus.send(from, to, content, properties.timeout, function (err) {
+      var time = Date.now() - date;
+      logger.trace('response from target', {target: to, err: err});
+      target.notifyRes(time);
+      if (!err || err.code !== 'TIMEOUT') {
+        done && done(err);
+      } else {
+        target.queue({from: from, to: to, content: content, done: done});
+      }
+    }, {safe: true});
+  } else {
+    logger.trace('target not opened, message queued', {target: target.id, rate: target.rate});
+    target.queue({from: from, to: to, content: content, done: done});
+  }
 };
 
 /**
@@ -98,14 +123,14 @@ function middlewareSafeIn(req, next) {
     return logger.trace('timeout excedeed !', {req: req});
   }
 
-  var collection = db.collection(conf.mongo.collection);
+  var collection = db.collection(mongoConf.collection);
   var toPersist = {
     date: Date.now(),
     req: _.omit(req, 'reply')
   };
   collection.insert(toPersist, {safe: true}, function (err, records) {
     if (err) {
-      logger.trace('safe message queueing error, will not be processed !');
+      logger.warn('safe message queueing error, will not be processed !');
       req.reply({code: 'MONGOERR', message: 'couldnt queue message to process, stop processing'});
     } else {
       req.headers.safeId = records[0]._id;
@@ -123,7 +148,7 @@ function middlewareSafeIn(req, next) {
 function middlewareSafeOut(res) {
   logger.trace('middleware processing response...', {res: res});
 
-  var collection = db.collection(conf.mongo.collection);
+  var collection = db.collection(mongoConf.collection);
   collection.remove({_id: res.headers.safeId}, function (err) {
     if (err) {
       logger.trace('safe message removal error', err);

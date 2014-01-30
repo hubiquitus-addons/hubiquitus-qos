@@ -1,8 +1,9 @@
+var util = require('util');
+var _ = require('lodash');
 var hubiquitus = require('hubiquitus-core');
 var logger = hubiquitus.logger('hubiquitus:addons:qos:sample');
-hubiquitus.logger.enable('hubiquitus:addons:*', 'trace');
+hubiquitus.logger.enable('hubiquitus:addons:*', 'warn');
 var hubiquitusQos = require(__dirname + '/../index');
-var util = require('util');
 
 hubiquitusQos.configure(function (err) {
   if (err) {
