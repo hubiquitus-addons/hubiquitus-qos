@@ -68,7 +68,7 @@ exports.send = function (from, to, content, done) {
   var target = targets[bare];
   if (!target) {
     target = targets[bare] = new Target(bare);
-    target.debug = true;
+    //target.debug = true;
     target.on('processed', function (item) {
       exports.send(item.from, item.to, item.content, item.done);
     });
