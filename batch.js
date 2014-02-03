@@ -82,7 +82,7 @@ function main() {
             } else {
               logger.warn('handler ping returns error', {item: item, err: err});
             }
-          }, {ping: true});
+          }, {qos_ping: true});
         }
       });
 
@@ -97,10 +97,10 @@ function main() {
   }, conf.gcInterval);
 }
 
-function replay(safeId, req) {
+function replay(qosId, req) {
   hubiquitusQos.send(req.from, hubiquitus.utils.aid.bare(req.to), req.content, function (err) {
     if (!err) {
-      db.collection(conf.mongo.collection).remove({_id: safeId}, function (err) {
+      db.collection(conf.mongo.collection).remove({_id: qosId}, function (err) {
         if (err) {
           logger.error('failed to remove replayed req from queue, may be processed twice !', {_id: safeId, err: err});
         }

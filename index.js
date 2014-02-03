@@ -69,7 +69,7 @@ exports.send = function (from, to, content, done) {
   if (!target) {
     target = targets[bare] = new Target(bare);
     //target.debug = true;
-    target.on('processed', function (item) {
+    target.on('queue pop', function (item) {
       exports.send(item.from, item.to, item.content, item.done);
     });
   }
@@ -86,7 +86,7 @@ exports.send = function (from, to, content, done) {
       } else {
         target.queue({from: from, to: to, content: content, done: done});
       }
-    }, {safe: true});
+    }, {qos: true});
   } else {
     logger.trace('target not opened, message queued', {target: target.id, rate: target.rate});
     target.queue({from: from, to: to, content: content, done: done});
@@ -100,11 +100,11 @@ exports.send = function (from, to, content, done) {
  * @param {Function} next
  */
 exports.middleware = function (type, msg, next) {
-  if (type === 'req_in' && msg.headers.safe) {
+  if (type === 'req_in' && msg.headers.qos) {
     middlewareSafeIn(msg, next);
-  } else if (type === 'res_out' && msg.headers.safe) {
+  } else if (type === 'res_out' && msg.headers.qos) {
     middlewareSafeOut(msg);
-  } else if (type === 'req_in' && msg.headers.ping) {
+  } else if (type === 'req_in' && msg.headers.qos_ping) {
     msg.reply();
   } else {
     next();
@@ -128,12 +128,12 @@ function middlewareSafeIn(req, next) {
     date: Date.now(),
     req: _.omit(req, 'reply')
   };
-  collection.insert(toPersist, {safe: true}, function (err, records) {
+  collection.insert(toPersist, {w: 1}, function (err, records) {
     if (err) {
       logger.warn('safe message queueing error, will not be processed !');
       req.reply({code: 'MONGOERR', message: 'couldnt queue message to process, stop processing'});
     } else {
-      req.headers.safeId = records[0]._id;
+      req.headers.qos_id = records[0]._id;
       req.reply();
       next();
     }
@@ -149,10 +149,10 @@ function middlewareSafeOut(res) {
   logger.trace('middleware processing response...', {res: res});
 
   var collection = db.collection(mongoConf.collection);
-  collection.remove({_id: res.headers.safeId}, function (err) {
+  collection.remove({_id: res.headers.qos_id}, function (err) {
     if (err) {
       logger.trace('safe message removal error', err);
     }
   });
-  delete res.headers.safeId;
+  delete res.headers.qos_id;
 }
