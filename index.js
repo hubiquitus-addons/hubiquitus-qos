@@ -68,7 +68,7 @@ exports.send = function (from, to, content, done) {
   var target = targets[bare];
   if (!target) {
     target = targets[bare] = new Target(bare);
-    target.debug = true;
+    //target.debug = true;
     target.on('queue pop', function (item) {
       exports.send(item.from, item.to, item.content, item.done);
     });
@@ -77,11 +77,17 @@ exports.send = function (from, to, content, done) {
   if (target.ok()) {
     target.notifyReq();
     var date = Date.now();
-    hubiquitus.send(from, to, content, properties.timeout, function (err) {
+
+    var timeout = setTimeout(function () {
+      target.notifyRes(properties.timeout);
+    }, properties.timeout);
+
+    hubiquitus.send(from, to, content, properties.processingTimeout, function (err) {
       var time = Date.now() - date;
+      clearTimeout(timeout);
       logger.trace('response from target', {target: to, err: err});
-      target.notifyRes(time);
       if (!err || err.code !== 'TIMEOUT') {
+        if (time < properties.timeout) target.notifyRes(time);
         done && done(err);
       } else {
         target.queue({from: from, to: to, content: content, done: done});
@@ -144,7 +150,7 @@ exports.middleware = function (type, msg, next) {
  */
 function middlewareSafeIn(req, next) {
   logger.trace('middleware processing request...', {req: req});
-  if (Date.now() - req.date > req.timeout) {
+  if (Date.now() - req.date > properties.timeout) {
     return logger.trace('timeout excedeed !', {req: req});
   }
 
