@@ -12,9 +12,9 @@ while (i++ < 100000) {
   dosend();
 }
 
-setInterval(function () {
+/*setInterval(function () {
   dosend();
-}, 1);
+}, 1);*/
 
 function dosend() {
   hubiquitusQos.send('god', 'sampleActor', 'do safe work !', function (err) {

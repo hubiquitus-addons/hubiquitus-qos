@@ -68,7 +68,7 @@ exports.send = function (from, to, content, done) {
   var target = targets[bare];
   if (!target) {
     target = targets[bare] = new Target(bare);
-    //target.debug = true;
+    target.debug = true;
     target.on('queue pop', function (item) {
       exports.send(item.from, item.to, item.content, item.done);
     });
@@ -91,6 +91,31 @@ exports.send = function (from, to, content, done) {
     logger.trace('target not opened, message queued', {target: target.id, rate: target.rate});
     target.queue({from: from, to: to, content: content, done: done});
   }
+};
+
+/**
+ * Manually inject message to queue
+ * @param {Object} req
+ */
+exports.manualQueue = function (req) {
+  persist(req, function (err, id) {
+    if (err) {
+      logger.warn('safe message manual queueing error, will not be processed !');
+      req.reply({code: 'MONGOERR', message: 'couldnt queue message to process, stop processing'});
+    } else {
+      req.headers.qos_id = id;
+      req.reply(null, {
+        done: function () {
+          remove(id, function (err) {
+            if (err) {
+              logger.warn('safe message removal error', err);
+            }
+          });
+        }
+      });
+      next();
+    }
+  });
 };
 
 /**
@@ -123,17 +148,12 @@ function middlewareSafeIn(req, next) {
     return logger.trace('timeout excedeed !', {req: req});
   }
 
-  var collection = db.collection(mongoConf.collection);
-  var toPersist = {
-    date: Date.now(),
-    req: _.omit(req, 'reply')
-  };
-  collection.insert(toPersist, {w: 1}, function (err, records) {
+  persist(req, function (err, id) {
     if (err) {
       logger.warn('safe message queueing error, will not be processed !');
       req.reply({code: 'MONGOERR', message: 'couldnt queue message to process, stop processing'});
     } else {
-      req.headers.qos_id = records[0]._id;
+      req.headers.qos_id = id;
       req.reply();
       next();
     }
@@ -147,12 +167,38 @@ function middlewareSafeIn(req, next) {
  */
 function middlewareSafeOut(res) {
   logger.trace('middleware processing response...', {res: res});
-
-  var collection = db.collection(mongoConf.collection);
-  collection.remove({_id: res.headers.qos_id}, function (err) {
+  remove(res.headers.qos_id, function (err) {
     if (err) {
-      logger.trace('safe message removal error', err);
+      logger.warn('safe message removal error', err);
     }
   });
   delete res.headers.qos_id;
+}
+
+/**
+ * Persist an item into mongo queue
+ * @param {Object} req
+ * @param {Function} done
+ */
+function persist(req, done) {
+  var collection = db.collection(mongoConf.collection);
+  var toPersist = {
+    date: Date.now(),
+    req: _.omit(req, 'reply')
+  };
+  collection.insert(toPersist, {w: 1}, function (err, records) {
+    done(err, (_.isArray(records) && records.length > 0) ? records[0]._id : null);
+  });
+}
+
+/**
+ * Remove an item from mongo queue
+ * @param {Object} id
+ * @param {Function} done
+ */
+function remove(id, done) {
+  var collection = db.collection(mongoConf.collection);
+  collection.remove({_id: id}, function (err) {
+    done(err);
+  });
 }
