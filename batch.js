@@ -8,13 +8,13 @@ var mongo = require('mongodb');
 commander
   .version('0.0.1')
   .option('-d, --debug', 'Debug')
-  .option('-disc, --discovery [str]', 'Discovery addr')
-  .option('-gc, --gc-interval [n]', 'GC interval', parseInt)
+  .option('-g, --gc-interval [n]', 'GC interval', parseInt)
   .option('-t, --timeout [n]', 'Processing timeout', parseInt)
-  .option('-mhost, --mongo-host [str]', 'Mongo host')
-  .option('-mport, --mongo-port [n]', 'Mongo port', parseInt)
-  .option('-mdb, --mongo-dbname [str]', 'Mongo dbname')
-  .option('-mcoll, --mongo-collection [str]', 'Mongo collection')
+  .option('--discovery [str]', 'Discovery addr')
+  .option('--mongo-host [str]', 'Mongo host')
+  .option('--mongo-port [n]', 'Mongo port', parseInt)
+  .option('--mongo-dbname [str]', 'Mongo dbname')
+  .option('--mongo-collection [str]', 'Mongo collection')
   .parse(process.argv);
 
 var conf = {
