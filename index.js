@@ -106,7 +106,7 @@ exports.send = function (from, to, content, done) {
  * @param {Object} content
  * @param {Function} [done]
  */
-exports.manualQueue = function (from, to, content, done) {
+exports.persist = function (from, to, content, done) {
   var collection = db.collection(mongoConf.collection);
 
   var toPersist = {
@@ -117,7 +117,7 @@ exports.manualQueue = function (from, to, content, done) {
   collection.insert(toPersist, {w: 1}, function (err, records) {
     var id = (_.isArray(records) && records.length > 0) ? records[0]._id : null;
     if (err || id === null) {
-      logger.warn('safe message manual queueing error, will not be processed !', err);
+      logger.warn('message manual persisting error, will not be processed !', err);
       done && done({code: 'MONGOERR', message: 'couldnt queue message to process, stop processing'});
     } else {
       done && done(null, {
@@ -134,6 +134,30 @@ exports.manualQueue = function (from, to, content, done) {
 };
 
 /**
+ * Persists message, call done and send it. Flush queue at ack.
+ * @param {String} from
+ * @param {String} to
+ * @param {Object} content
+ * @param {Function} [done]
+ */
+exports.persistAndSend = function (from, to, content, done) {
+  exports.persist(from, to, content, function (err, res) {
+    if (err) {
+      logger.warn('failed to persist message', err);
+      done && done(err);
+    }
+
+    done && done();
+    exports.send(from, to, content, function (err) {
+      if (err) {
+        return logger.warn('failed to send message safely', err);
+      }
+      res.done && res.done();
+    });
+  });
+};
+
+/**
  * Middleware
  * @param {String} type
  * @param {Object} msg
@@ -145,6 +169,7 @@ exports.middleware = function (type, msg, next) {
   } else if (type === 'res_out' && msg.headers.qos) {
     middlewareSafeOut(msg);
   } else if (type === 'req_in' && msg.headers.qos_ping) {
+    logger.trace('ping request from batch', msg);
     msg.reply();
   } else {
     next();
