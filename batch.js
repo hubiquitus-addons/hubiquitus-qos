@@ -73,7 +73,8 @@ function main() {
           replay(item._id, item.req);
         } else {
           logger.trace('timeout reached; try to ping handler...', {item: item});
-          hubiquitus.send('qosBatch', item.req.to, null, function (err) {
+          var toPing = item.type === 'in' ? item.req.to : item.req.from;
+          hubiquitus.send('qosBatch', toPing, null, 3000, function (err) {
             if (err && err.code === 'TIMEOUT') {
               logger.trace('handler dead; request replay', {item: item});
               replay(item._id, item.req);
@@ -102,9 +103,11 @@ function replay(qosId, req) {
     if (!err) {
       db.collection(conf.mongo.collection).remove({_id: qosId}, function (err) {
         if (err) {
-          logger.error('failed to remove replayed req from queue, may be processed twice !', {_id: safeId, err: err});
+          logger.error('failed to remove replayed req from queue, may be processed twice !', {_id: qosId, err: err});
         }
       });
+    } else {
+      logger.error('failed to replay req, remains in queue', {err: err});
     }
   });
 }

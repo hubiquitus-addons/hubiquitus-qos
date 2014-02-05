@@ -36,6 +36,7 @@ exports.configure = function (conf, done) {
     return logger.warn('invalid configuration; use of default one', {conf: conf, err: tv4.error, defaultConf: conf});
   }
 
+  if (conf.debug) properties.debug = true;
   if (conf.mongo) _.assign(mongoConf, conf.mongo);
   if (conf.timeout) properties.timeout = conf.timeout;
   logger.info('use configuration', {conf: conf});
@@ -68,7 +69,6 @@ exports.send = function (from, to, content, done) {
   var target = targets[bare];
   if (!target) {
     target = targets[bare] = new Target(bare);
-    //target.debug = true;
     target.on('queue pop', function (item) {
       exports.send(item.from, item.to, item.content, item.done);
     });
@@ -101,25 +101,34 @@ exports.send = function (from, to, content, done) {
 
 /**
  * Manually inject message to queue
- * @param {Object} req
+ * @param {String} from
+ * @param {String} to
+ * @param {Object} content
+ * @param {Function} [done]
  */
-exports.manualQueue = function (req) {
-  persist(req, function (err, id) {
-    if (err) {
-      logger.warn('safe message manual queueing error, will not be processed !');
-      req.reply({code: 'MONGOERR', message: 'couldnt queue message to process, stop processing'});
+exports.manualQueue = function (from, to, content, done) {
+  var collection = db.collection(mongoConf.collection);
+
+  var toPersist = {
+    type: 'out',
+    date: Date.now(),
+    req: {from: from, to: to, content: content}
+  };
+  collection.insert(toPersist, {w: 1}, function (err, records) {
+    var id = (_.isArray(records) && records.length > 0) ? records[0]._id : null;
+    if (err || id === null) {
+      logger.warn('safe message manual queueing error, will not be processed !', err);
+      done && done({code: 'MONGOERR', message: 'couldnt queue message to process, stop processing'});
     } else {
-      req.headers.qos_id = id;
-      req.reply(null, {
+      done && done(null, {
         done: function () {
-          remove(id, function (err) {
+          collection.remove({_id: id}, function (err) {
             if (err) {
               logger.warn('safe message removal error', err);
             }
           });
         }
       });
-      next();
     }
   });
 };
@@ -154,9 +163,17 @@ function middlewareSafeIn(req, next) {
     return logger.trace('timeout excedeed !', {req: req});
   }
 
-  persist(req, function (err, id) {
-    if (err) {
-      logger.warn('safe message queueing error, will not be processed !');
+  var collection = db.collection(mongoConf.collection);
+  var toPersist = {
+    type: 'in',
+    date: Date.now(),
+    req: _.omit(req, 'reply')
+  };
+  collection.insert(toPersist, {w: 1}, function (err, records) {
+    var id = (_.isArray(records) && records.length > 0) ? records[0]._id : null;
+
+    if (err || id === null) {
+      logger.warn('safe message queueing error, will not be processed !', err);
       req.reply({code: 'MONGOERR', message: 'couldnt queue message to process, stop processing'});
     } else {
       req.headers.qos_id = id;
@@ -173,38 +190,11 @@ function middlewareSafeIn(req, next) {
  */
 function middlewareSafeOut(res) {
   logger.trace('middleware processing response...', {res: res});
-  remove(res.headers.qos_id, function (err) {
+  var collection = db.collection(mongoConf.collection);
+  collection.remove({_id: res.headers.qos_id}, function (err) {
     if (err) {
       logger.warn('safe message removal error', err);
     }
   });
   delete res.headers.qos_id;
-}
-
-/**
- * Persist an item into mongo queue
- * @param {Object} req
- * @param {Function} done
- */
-function persist(req, done) {
-  var collection = db.collection(mongoConf.collection);
-  var toPersist = {
-    date: Date.now(),
-    req: _.omit(req, 'reply')
-  };
-  collection.insert(toPersist, {w: 1}, function (err, records) {
-    done(err, (_.isArray(records) && records.length > 0) ? records[0]._id : null);
-  });
-}
-
-/**
- * Remove an item from mongo queue
- * @param {Object} id
- * @param {Function} done
- */
-function remove(id, done) {
-  var collection = db.collection(mongoConf.collection);
-  collection.remove({_id: id}, function (err) {
-    done(err);
-  });
 }
