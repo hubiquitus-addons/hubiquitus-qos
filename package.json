@@ -1,12 +1,9 @@
 {
   "name": "hubiquitus-qos",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "repository": {
     "type": "git",
     "url": "https://git@github.com:hubiquitus-addons/hubiquitus-qos"
-  },
-  "bin": {
-    "h-qos-batch": "./batch"
   },
   "dependencies": {
     "commander": "2.1.*",

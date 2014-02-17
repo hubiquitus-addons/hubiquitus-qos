@@ -4,9 +4,10 @@ var logger = hubiquitus.logger('hubiquitus:addons:qos:batch');
 hubiquitus.logger.enable('hubiquitus:addons:qos:batch', 'trace');
 var commander = require('commander');
 var mongo = require('mongodb');
+var version = require('./package').version;
 
 commander
-  .version('0.0.1')
+  .version(version)
   .option('-d, --debug', 'Debug')
   .option('-g, --gc-interval [n]', 'GC interval', parseInt)
   .option('-t, --timeout [n]', 'Processing timeout', parseInt)
@@ -51,10 +52,7 @@ function main() {
   setInterval(function () {
     logger.trace('garbage collector iteration begins');
     var query = {
-      $or: [
-        {date: {$lt: (Date.now() - conf.timeout)}, err: null},
-        {error: true}
-      ]
+      date: {$lt: (Date.now() - conf.timeout)}, err: null
     };
 
     var cursor = db.collection(conf.mongo.collection).find(query);
@@ -68,23 +66,18 @@ function main() {
       var stream = cursor.stream();
 
       stream.on('data', function (item) {
-        if (item.error) {
-          logger.trace('item in error; request replay', {item: item});
-          replay(item._id, item.req);
-        } else {
-          logger.trace('timeout reached; try to ping handler...', {item: item});
-          var toPing = item.type === 'in' ? item.req.to : item.req.from;
-          hubiquitus.send('qosBatch', toPing, null, 3000, function (err) {
-            if (err && err.code === 'TIMEOUT') {
-              logger.trace('handler dead; request replay', {item: item});
-              replay(item._id, item.req);
-            } else if (!err) {
-              logger.trace('handler alive; let\'s give him more time', {item: item});
-            } else {
-              logger.warn('handler ping returns error', {item: item, err: err});
-            }
-          }, {qos_ping: true});
-        }
+        logger.trace('timeout reached; try to ping handler...', {item: item});
+        var toPing = item.type === 'in' ? item.req.to : item.req.from;
+        hubiquitus.send('qosBatch', toPing, null, 3000, function (err) {
+          if (err && err.code === 'TIMEOUT') {
+            logger.trace('handler dead; request replay', {item: item});
+            replay(item._id, item.req);
+          } else if (!err) {
+            logger.trace('handler alive; let\'s give him more time', {item: item});
+          } else {
+            logger.warn('handler ping returns error', {item: item, err: err});
+          }
+        }, {qos_ping: true});
       });
 
       stream.on('close', function () {
