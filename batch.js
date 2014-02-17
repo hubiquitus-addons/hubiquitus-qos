@@ -52,7 +52,7 @@ function main() {
     logger.trace('garbage collector iteration begins');
     var query = {
       $or: [
-        {date: {$lt: (Date.now() - conf.timeout)}},
+        {date: {$lt: (Date.now() - conf.timeout)}, err: null},
         {error: true}
       ]
     };

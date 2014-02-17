@@ -192,6 +192,7 @@ function middlewareSafeIn(req, next) {
   var toPersist = {
     type: 'in',
     date: Date.now(),
+    err: null,
     req: _.omit(req, 'reply')
   };
   collection.insert(toPersist, {w: 1}, function (err, records) {
@@ -216,10 +217,18 @@ function middlewareSafeIn(req, next) {
 function middlewareSafeOut(res) {
   logger.trace('middleware processing response...', {res: res});
   var collection = db.collection(mongoConf.collection);
-  collection.remove({_id: res.headers.qos_id}, function (err) {
-    if (err) {
-      logger.warn('safe message removal error', err);
-    }
-  });
+  if (res.err) {
+    collection.update({_id: res.headers.qos_id}, {'$set': {err: res.err}}, function (err) {
+      if (err) {
+        logger.warn('safe message update error', err);
+      }
+    });
+  } else {
+    collection.remove({_id: res.headers.qos_id}, function (err) {
+      if (err) {
+        logger.warn('safe message removal error', err);
+      }
+    });
+  }
   delete res.headers.qos_id;
 }
