@@ -232,3 +232,8 @@ function middlewareSafeOut(res) {
   }
   delete res.headers.qos_id;
 }
+
+/**
+ * Batch
+ */
+exports.batch = require('./lib/batch');
