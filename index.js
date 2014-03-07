@@ -144,7 +144,7 @@ exports.persistAndSend = function (from, to, content, done) {
   exports.persist(from, to, content, function (err, res) {
     if (err) {
       logger.warn('failed to persist message', err);
-      done && done(err);
+      return done && done(err);
     }
 
     done && done();
@@ -220,13 +220,13 @@ function middlewareSafeOut(res) {
   if (res.err) {
     collection.update({_id: res.headers.qos_id}, {'$set': {err: res.err}}, function (err) {
       if (err) {
-        logger.warn('safe message update error', err);
+        return logger.warn('safe message update error', err);
       }
     });
   } else {
     collection.remove({_id: res.headers.qos_id}, function (err) {
       if (err) {
-        logger.warn('safe message removal error', err);
+        return logger.warn('safe message removal error', err);
       }
     });
   }
