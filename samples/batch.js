@@ -10,6 +10,7 @@ commander
   .option('-d, --debug', 'Debug')
   .option('-g, --gc-interval [n]', 'GC interval', parseInt)
   .option('-t, --timeout [n]', 'Processing timeout', parseInt)
+  .option('-l, --limit [n]', 'Items processed per tick', parseInt)
   .option('--discovery [str]', 'Discovery addr')
   .option('--mongo-host [str]', 'Mongo host')
   .option('--mongo-port [n]', 'Mongo port', parseInt)
