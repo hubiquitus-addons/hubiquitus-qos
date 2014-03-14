@@ -112,7 +112,10 @@ exports.persist = function (from, to, content, done) {
   var toPersist = {
     type: 'out',
     date: Date.now(),
-    req: {from: from, to: to, content: content}
+    req: {from: from, to: to, content: content},
+    container: {
+      ID: properties.ID
+    }
   };
   collection.insert(toPersist, {w: 1}, function (err, records) {
     var id = (_.isArray(records) && records.length > 0) ? records[0]._id : null;
@@ -168,9 +171,6 @@ exports.middleware = function (type, msg, next) {
     middlewareSafeIn(msg, next);
   } else if (type === 'res_out' && msg.headers.qos) {
     middlewareSafeOut(msg);
-  } else if (type === 'req_in' && msg.headers.qos_ping) {
-    logger.trace('ping request from batch', msg);
-    msg.reply();
   } else {
     next();
   }
@@ -193,7 +193,10 @@ function middlewareSafeIn(req, next) {
     type: 'in',
     date: Date.now(),
     err: null,
-    req: _.omit(req, 'reply')
+    req: _.omit(req, 'reply'),
+    container: {
+      ID: properties.ID
+    }
   };
   collection.insert(toPersist, {w: 1}, function (err, records) {
     var id = (_.isArray(records) && records.length > 0) ? records[0]._id : null;
