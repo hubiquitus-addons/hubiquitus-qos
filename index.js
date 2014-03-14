@@ -114,7 +114,7 @@ exports.persist = function (from, to, content, done) {
     date: Date.now(),
     req: {from: from, to: to, content: content},
     container: {
-      ID: properties.ID
+      ID: hubiquitus.properties.ID
     }
   };
   collection.insert(toPersist, {w: 1}, function (err, records) {
@@ -195,7 +195,7 @@ function middlewareSafeIn(req, next) {
     err: null,
     req: _.omit(req, 'reply'),
     container: {
-      ID: properties.ID
+      ID: hubiquitus.properties.ID
     }
   };
   collection.insert(toPersist, {w: 1}, function (err, records) {

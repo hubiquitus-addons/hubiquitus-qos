@@ -19,4 +19,7 @@ commander
   .parse(process.argv);
 
 hubiquitus.start({discoveryAddr: 'udp://224.0.0.1:5555'});
-hubiquitusQos.batch.run();
+hubiquitusQos.batch.run({
+  gcInterval: 15000,
+  timeout: 10000
+});

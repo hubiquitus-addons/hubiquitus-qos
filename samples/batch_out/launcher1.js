@@ -18,5 +18,7 @@ hubiquitusQos.configure(function (err) {
 
 function sampleActor(req) {
   logger.info('received safe message');
-  req.reply();
+  setTimeout(function () {
+    req.reply();
+  }, 30000);
 }

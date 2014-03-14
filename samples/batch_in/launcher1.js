@@ -18,5 +18,7 @@ hubiquitusQos.configure({debug: true}, function (err) {
 
 function sampleActor(req) {
   logger.info('received safe message');
-  // dont reply : batch should replay message
+  setTimeout(function () {
+    req.reply();  // wait before reply. batch should give me more time
+  }, 30000);
 }
