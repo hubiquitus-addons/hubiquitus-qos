@@ -112,6 +112,7 @@ exports.persist = function (from, to, content, done) {
   var toPersist = {
     type: 'out',
     date: Date.now(),
+    retry: 0,
     req: {from: from, to: to, content: content},
     container: {
       ID: hubiquitus.properties.ID
@@ -189,10 +190,14 @@ function middlewareSafeIn(req, next) {
   }
 
   var collection = db.collection(mongoConf.collection);
+  var retry = 0;
+  if (_.isNumber(req.headers.qos_retry)) {
+    retry = ++req.headers.qos_retry;
+  }
   var toPersist = {
     type: 'in',
     date: Date.now(),
-    err: null,
+    retry: retry,
     req: _.omit(req, 'reply'),
     container: {
       ID: hubiquitus.properties.ID
