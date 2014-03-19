@@ -186,7 +186,8 @@ exports.middleware = function (type, msg, next) {
 function middlewareSafeIn(req, next) {
   logger.trace('middleware processing request...', {req: req});
   if (Date.now() - req.date > properties.timeout) {
-    return logger.trace('timeout excedeed !', {req: req});
+    logger.trace('timeout excedeed !', {req: req});
+    return req.reply({code: 'TIMEOUT', message: 'QOS Middleware intercepted message but timeout exceeded !'});
   }
 
   var collection = db.collection(mongoConf.collection);

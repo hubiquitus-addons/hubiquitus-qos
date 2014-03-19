@@ -22,4 +22,6 @@ hubiquitus.start({discoveryAddr: 'udp://224.0.0.1:5555'});
 hubiquitusQos.batch.run({
   gcInterval: 15000,
   timeout: 10000
+}, function (err) {
+  if (err) process.exit(1);
 });
