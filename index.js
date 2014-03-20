@@ -63,41 +63,63 @@ exports.configure = function (conf, done) {
  * @param {Function} [done]
  */
 exports.send = function (from, to, content, done) {
-  logger.trace('send message with qos', {from: from, to: to, content: content, done: !!done});
-
   var bare = hubiquitus.utils.aid.bare(to);
   var target = targets[bare];
   if (!target) {
     target = targets[bare] = new Target(bare);
     target.on('queue pop', function (item) {
-      exports.send(item.from, item.to, item.content, item.done);
+      exports.send(item);
     });
   }
 
-  if (target.ok()) {
-    target.notifyReq();
-    var date = Date.now();
-
-    var timeout = setTimeout(function () {
-      target.notifyRes(properties.timeout);
-    }, properties.timeout);
-
-    hubiquitus.send(from, to, content, properties.processingTimeout, function (err) {
-      var time = Date.now() - date;
-      clearTimeout(timeout);
-      logger.trace('response from target', {target: to, err: err});
-      if (!err || err.code !== 'TIMEOUT') {
-        if (time < properties.timeout) target.notifyRes(time);
-        done && done(err);
-      } else {
-        target.queue({from: from, to: to, content: content, done: done});
-      }
-    }, {qos: true});
-  } else {
-    logger.trace('target not opened, message queued', {target: target.id, rate: target.rate});
-    target.queue({from: from, to: to, content: content, done: done});
-  }
+  internalSend(target, {from: from, to: to, content: content, done: done, retry: 0, id: hubiquitus.utils.uuid()});
 };
+
+function internalSend(target, msg) {
+  logger.trace('send message with qos', {msg: msg});
+
+  if (msg.retry > 0) {
+    var collection = db.collection(mongoConf.collection);
+    collection.findOne({_id: msg.id}, function (err, item) {
+      if (err) {
+        logger.error('error while checking if the message has already been persisted by the target before sending', {
+          err: err, msg: msg});
+        target.queue(msg);
+      } else if (!item) {
+        doSend();
+      }
+    });
+  } else {
+    doSend();
+  }
+
+  function doSend() {
+    if (target.ok()) {
+      target.notifyReq();
+      var date = Date.now();
+
+      var timeout = setTimeout(function () {
+        msg.retry++;
+        target.notifyRes(properties.timeout);
+      }, properties.timeout);
+
+      hubiquitus.send(msg.from, msg.to, msg.content, properties.processingTimeout, function (err) {
+        var time = Date.now() - date;
+        clearTimeout(timeout);
+        logger.trace('response from target', {msg: msg, err: err});
+        if (!err || err.code !== 'TIMEOUT') {
+          if (time < properties.timeout) target.notifyRes(time);
+          msg.done && msg.done(err);
+        } else {
+          target.queue(msg);
+        }
+      }, {qos: true, qos_id: msg.id});
+    } else {
+      logger.trace('target not opened, message queued', {target: target.id, rate: target.rate});
+      target.queue(msg);
+    }
+  }
+}
 
 /**
  * Manually inject message to queue
@@ -196,6 +218,7 @@ function middlewareSafeIn(req, next) {
     retry = req.headers.qos_retry;
   }
   var toPersist = {
+    _id: req.headers.qos_id,
     type: 'in',
     date: Date.now(),
     retry: retry,
@@ -211,7 +234,6 @@ function middlewareSafeIn(req, next) {
       logger.warn('safe message queueing error, will not be processed !', err);
       req.reply({code: 'MONGOERR', message: 'couldnt queue message to process, stop processing'});
     } else {
-      req.headers.qos_id = id;
       req.reply();
       next();
     }
@@ -239,7 +261,6 @@ function middlewareSafeOut(res) {
       }
     });
   }
-  delete res.headers.qos_id;
 }
 
 /**
