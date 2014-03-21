@@ -33,13 +33,13 @@ exports.configure = function (conf, done) {
   conf = conf || {};
 
   if (!tv4.validate(conf, schemas.conf)) {
-    return logger.warn('invalid configuration; use of default one', {conf: conf, err: tv4.error, defaultConf: conf});
+    logger.warn('invalid configuration; use of default one', {conf: conf, err: tv4.error, defaultConf: conf});
+  } else {
+    if (conf.mongo) _.assign(mongoConf, conf.mongo);
+    if (conf.timeout) properties.timeout = conf.timeout;
+    if (conf.processingTimeout) properties.processingTimeout = conf.processingTimeout;
+    logger.info('use configuration', {conf: conf});
   }
-
-  if (conf.debug) properties.debug = true;
-  if (conf.mongo) _.assign(mongoConf, conf.mongo);
-  if (conf.timeout) properties.timeout = conf.timeout;
-  logger.info('use configuration', {conf: conf});
 
   /* connection to the database */
   var server = new mongo.Server(mongoConf.host, mongoConf.port, {auto_reconnect: true});
