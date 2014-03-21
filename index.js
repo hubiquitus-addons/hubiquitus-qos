@@ -60,7 +60,7 @@ exports.send = function (from, to, content, done) {
   if (!target) {
     target = targets[bare] = new Target(bare);
     target.on('queue pop', function (item) {
-      exports.send(item);
+      internalSend(target, item);
     });
   }
 
