@@ -136,7 +136,7 @@ exports.persist = function (from, to, content, done) {
     var id = (_.isArray(records) && records.length > 0) ? records[0]._id : null;
     if (err || id === null) {
       logger.warn('message manual persisting error, will not be processed !', err);
-      done && done({code: 'MONGOERR', message: 'couldnt queue message to process, stop processing'});
+      done && done({code: 'MONGOERR', message: 'couldnt queue message to process, stop processing', cause: err});
     } else {
       done && done(null, {
         done: function () {
