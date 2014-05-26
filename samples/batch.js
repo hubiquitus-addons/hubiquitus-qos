@@ -12,10 +12,8 @@ commander
   .option('-t, --timeout [n]', 'Processing timeout', parseInt)
   .option('-l, --limit [n]', 'Items processed per tick', parseInt)
   .option('--discovery [str]', 'Discovery addr')
-  .option('--mongo-host [str]', 'Mongo host')
-  .option('--mongo-port [n]', 'Mongo port', parseInt)
-  .option('--mongo-dbname [str]', 'Mongo dbname')
-  .option('--mongo-collection [str]', 'Mongo collection')
+  .option('--mongo [str]', 'Mongo uri [mongodb://localhost:27017/qos]')
+  .option('--collection [str]', 'Mongo collection [queue]')
   .parse(process.argv);
 
 hubiquitus.start({discoveryAddr: 'udp://224.0.0.1:5555'});

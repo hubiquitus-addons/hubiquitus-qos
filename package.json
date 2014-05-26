@@ -1,6 +1,6 @@
 {
   "name": "hubiquitus-qos",
-  "version": "0.2.16",
+  "version": "0.3.0",
   "repository": {
     "type": "git",
     "url": "https://git@github.com:hubiquitus-addons/hubiquitus-qos"
@@ -10,7 +10,7 @@
     "hubiquitus-core": "0.8.*",
     "tv4": "1.0.11",
     "lodash": "2.4.*",
-    "mongodb": "1.3.*"
+    "mongodb": "1.4.*"
   },
   "main": "./index.js"
 }

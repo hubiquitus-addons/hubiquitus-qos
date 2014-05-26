@@ -5,6 +5,7 @@ var logger = hubiquitus.logger('hubiquitus:addons:qos');
 var _ = require('lodash');
 var tv4 = require('tv4');
 var mongo = require('mongodb');
+var MongoClient = require('mongodb').MongoClient;
 var Target = require('./lib/target').Target;
 var schemas = require('./lib/schemas');
 var properties = require('./lib/properties');
@@ -27,22 +28,21 @@ exports.configure = function (conf, done) {
   if (!tv4.validate(conf, schemas.conf)) {
     logger.warn('invalid configuration; the default one will be used', {conf: conf, err: tv4.error});
   } else {
-    if (conf.mongo) _.assign(properties.mongo, conf.mongo);
+    if (conf.mongo) properties.mongo = conf.mongo;
+    if (conf.collection) properties.collection = conf.collection;
     if (conf.timeout) properties.timeout = conf.timeout;
     if (conf.processingTimeout) properties.processingTimeout = conf.processingTimeout;
   }
   logger.info('use configuration', {conf: properties});
 
   /* connection to the database */
-  var server = new mongo.Server(properties.mongo.host, properties.mongo.port, {auto_reconnect: true});
-  var client = new mongo.MongoClient(server);
-  client.open(function (err, client) {
+  MongoClient.connect(properties.mongo, {mongos: {'auto_reconnect': true}} , function(err, _db) {
     if (err) {
-      var errid = logger.error('cant connect database', {conf: properties.mongo, err: err});
-      return done && done({code: 'MONGOERR', errid: errid});
+      logger.error('cant connect to database', {conf: properties.mongo, err: err});
+      return done && done({code: 'MONGOERR'});
     }
     logger.info('connected to database', {conf: properties.mongo});
-    db = client.db(properties.mongo.dbname);
+    db = _db;
     done && done();
   });
 };
@@ -71,7 +71,7 @@ function internalSend(target, msg) {
   logger.trace('send message with qos', {msg: msg});
 
   if (msg.retry > 0) {
-    var collection = db.collection(properties.mongo.collection);
+    var collection = db.collection(properties.collection);
     collection.findOne({_id: msg.id}, function (err, item) {
       if (err) {
         logger.error('error while checking if the message has already been persisted by the target before sending', {
@@ -121,7 +121,7 @@ function internalSend(target, msg) {
  * @param {Function} [done]
  */
 exports.persist = function (from, to, content, done) {
-  var collection = db.collection(properties.mongo.collection);
+  var collection = db.collection(properties.collection);
 
   var toPersist = {
     type: 'out',
@@ -204,7 +204,7 @@ function middlewareSafeIn(req, next) {
     return req.reply({code: 'TIMEOUT', message: 'QOS Middleware intercepted message but timeout exceeded !'});
   }
 
-  var collection = db.collection(properties.mongo.collection);
+  var collection = db.collection(properties.collection);
   var retry = 0;
   if (_.isNumber(req.headers.qos_retry)) {
     retry = req.headers.qos_retry;
@@ -239,7 +239,7 @@ function middlewareSafeIn(req, next) {
  */
 function middlewareSafeOut(res) {
   logger.trace('middleware processing response...', {res: res});
-  var collection = db.collection(properties.mongo.collection);
+  var collection = db.collection(properties.collection);
   if (res.err) {
     collection.update({_id: res.headers.qos_id}, {'$set': {err: res.err}}, function (err) {
       if (err) {
