@@ -5,7 +5,7 @@ var logger = hubiquitus.logger('hubiquitus:addons:qos:sample');
 hubiquitus.logger.enable('hubiquitus:addons:*', 'trace');
 var hubiquitusQos = require(__dirname + '/../../index');
 
-hubiquitusQos.configure({debug: true}, function (err) {
+hubiquitusQos.configure(function (err) {
   if (err) {
     return logger.err('qos addon configuration error');
   }

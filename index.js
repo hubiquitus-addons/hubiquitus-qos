@@ -51,10 +51,15 @@ exports.configure = function (conf, done) {
  * Send a message
  * @param {String} from
  * @param {String} to
- * @param {Object} [content]
- * @param {Function} [done]
+ * @param {Object} content
+ * @param {Object} [headers={}]
+ * @param {Function} done
  */
-exports.send = function (from, to, content, done) {
+exports.send = function (from, to, content, headers, done) {
+  if (_.isUndefined(done)) {
+    done = headers;
+    headers = {};
+  }
   var bare = hubiquitus.utils.aid.bare(to);
   var target = targets[bare];
   if (!target) {
@@ -63,8 +68,8 @@ exports.send = function (from, to, content, done) {
       internalSend(target, item);
     });
   }
-
-  internalSend(target, {from: from, to: to, content: content, done: done, retry: 0, id: hubiquitus.utils.uuid()});
+  var uid = hubiquitus.utils.uuid();
+  internalSend(target, {from: from, to: to, content: content, headers: headers, done: done, retry: 0, id: uid});
 };
 
 function internalSend(target, msg) {
@@ -105,7 +110,7 @@ function internalSend(target, msg) {
         } else {
           target.queue(msg);
         }
-      }, {qos: true, qos_id: msg.id});
+      }, _.assign(msg.headers, {qos: true, qos_id: msg.id}));
     } else {
       logger.trace('target not opened, message queued', {target: target.id, rate: target.rate});
       target.queue(msg);
@@ -118,16 +123,17 @@ function internalSend(target, msg) {
  * @param {String} from
  * @param {String} to
  * @param {Object} content
+ * @param {Object} headers
  * @param {Function} [done]
  */
-exports.persist = function (from, to, content, done) {
+exports.persist = function (from, to, content, headers, done) {
   var collection = db.collection(properties.collection);
 
   var toPersist = {
     type: 'out',
     date: Date.now(),
     retry: 0,
-    req: {from: from, to: to, content: content},
+    req: {from: from, to: to, content: content, headers: headers},
     container: {
       ID: hubiquitus.properties.ID
     }
@@ -156,17 +162,23 @@ exports.persist = function (from, to, content, done) {
  * @param {String} from
  * @param {String} to
  * @param {Object} content
- * @param {Function} [done]
+ * @param {Object} [headers={}]
+ * @param {Function} done
  */
-exports.persistAndSend = function (from, to, content, done) {
-  exports.persist(from, to, content, function (err, res) {
+exports.persistAndSend = function (from, to, content, headers, done) {
+  if (_.isUndefined(done)) {
+    done = headers;
+    headers = {};
+  }
+
+  exports.persist(from, to, content, headers, function (err, res) {
     if (err) {
       logger.warn('failed to persist message', err);
       return done && done(err);
     }
 
     done && done();
-    exports.send(from, to, content, function (err) {
+    exports.send(from, to, content, headers, function (err) {
       if (err) {
         return logger.warn('failed to send message safely', err);
       }

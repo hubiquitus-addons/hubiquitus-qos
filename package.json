@@ -1,6 +1,6 @@
 {
   "name": "hubiquitus-qos",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "repository": {
     "type": "git",
     "url": "https://git@github.com:hubiquitus-addons/hubiquitus-qos"
@@ -11,6 +11,11 @@
     "tv4": "1.2.*",
     "lodash": "4.5.*",
     "mongodb": "1.4.*"
+  },
+  "devDependencies": {
+    "chai": "^3.5.0",
+    "mocha": "^2.4.5",
+    "sinon": "^1.17.3"
   },
   "main": "./index.js"
 }
