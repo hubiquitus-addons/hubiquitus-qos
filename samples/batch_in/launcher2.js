@@ -13,7 +13,7 @@ hubiquitusQos.configure({debug: true}, function (err) {
     .use(hubiquitusQos.middleware)
     .start({discoveryAddr: 'udp://224.0.0.1:5555'});
 
-  hubiquitusQos.send('god', 'sampleActor', 'do safe work !', function (err) {
+  hubiquitusQos.send('god', 'sampleActor', 'do safe work !', {userInfos:{name:'sam'}}, function (err) {
     if (err) {
       return logger.error('my message will not be processed :(');
     }
