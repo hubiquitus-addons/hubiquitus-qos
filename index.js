@@ -231,10 +231,9 @@ function middlewareSafeIn(req, next) {
       ID: hubiquitus.properties.ID
     }
   };
-  collection.insert(toPersist, {w: 1}, function (err, records) {
-    var id = (_.isArray(records) && records.length > 0) ? records[0]._id : null;
 
-    if (err || id === null) {
+  collection.update({_id:toPersist._id}, toPersist, {upsert: true}, function (err) {
+    if (err) {
       logger.warn('safe message queueing error, will not be processed !', err);
       req.reply({code: 'MONGOERR', message: 'couldnt queue message to process, stop processing'});
     } else {
@@ -259,9 +258,9 @@ function middlewareSafeOut(res) {
       }
     });
   } else {
-    collection.remove({_id: res.headers.qos_id}, function (err) {
+    collection.update({_id: res.headers.qos_id}, {'$set': {removalTime: new Date()}}, function (err) {
       if (err) {
-        return logger.warn('safe message removal error', err);
+        return logger.warn('safe message update removalTime error', err);
       }
     });
   }
