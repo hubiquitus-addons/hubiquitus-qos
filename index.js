@@ -36,7 +36,7 @@ exports.configure = function (conf, done) {
   logger.info('use configuration', {conf: properties});
 
   /* connection to the database */
-  MongoClient.connect(properties.mongo, {mongos: {'auto_reconnect': true}} , function(err, _db) {
+  MongoClient.connect(properties.mongo, null , function(err, _db) {
     if (err) {
       logger.error('cant connect to database', {conf: properties.mongo, err: err});
       return done && done({code: 'MONGOERR'});
@@ -138,8 +138,8 @@ exports.persist = function (from, to, content, headers, done) {
       ID: hubiquitus.properties.ID
     }
   };
-  collection.insert(toPersist, {w: 1}, function (err, records) {
-    var id = (_.isArray(records) && records.length > 0) ? records[0]._id : null;
+  collection.insertOne(toPersist, {w: 1}, function (err, res) {
+    var id = res.insertedCount?res.insertedId : null;
     if (err || id === null) {
       logger.warn('message manual persisting error, will not be processed !', err);
       done && done({code: 'MONGOERR', message: 'couldnt queue message to process, stop processing', cause: err});
@@ -232,7 +232,7 @@ function middlewareSafeIn(req, next) {
     }
   };
 
-  collection.update({_id:toPersist._id}, toPersist, {upsert: true}, function (err) {
+  collection.updateOne({_id:toPersist._id}, toPersist, {upsert: true}, function (err) {
     if (err) {
       logger.warn('safe message queueing error, will not be processed !', err);
       req.reply({code: 'MONGOERR', message: 'couldnt queue message to process, stop processing'});
@@ -252,13 +252,13 @@ function middlewareSafeOut(res) {
   logger.trace('middleware processing response...', {res: res});
   var collection = db.collection(properties.collection);
   if (res.err) {
-    collection.update({_id: res.headers.qos_id}, {'$set': {err: res.err}}, function (err) {
+    collection.updateOne({_id: res.headers.qos_id}, {'$set': {err: res.err}}, function (err) {
       if (err) {
         return logger.warn('safe message update error', err);
       }
     });
   } else {
-    collection.update({_id: res.headers.qos_id}, {'$set': {removalTime: new Date()}}, function (err) {
+    collection.updateOne({_id: res.headers.qos_id}, {'$set': {removalTime: new Date()}}, function (err) {
       if (err) {
         return logger.warn('safe message update removalTime error', err);
       }

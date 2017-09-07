@@ -123,7 +123,7 @@ describe('HQOS-headers', function () {
 
     hubiquitus.addActor('sampleActor4', sampleActor);
     async.times (nbSend, dosend, function (err, res) {
-      expect(err).to.be.null;
+      expect(err).to.be.undefined;
       checkresult();
     });
   });
@@ -161,7 +161,7 @@ describe('HQOS-headers', function () {
 
     hubiquitus.addActor('sampleActor5', sampleActor);
     async.times (nbSend, dosend, function (err, res) {
-      expect(err).to.be.null;
+      expect(err).to.be.undefined;
       checkresult();
     });
   });
