@@ -1,10 +1,8 @@
 'use strict';
 var chai = require('chai');
 var expect = chai.expect;
-var sinon = require('sinon');
 var _ = require('lodash');
 var hubiquitus = require('hubiquitus-core');
-var logger = hubiquitus.logger('hubiquitus:addons:qos:sample');
 hubiquitus.logger.enable('hubiquitus:addons:*', 'info');
 hubiquitus.logger.enable('hubiquitus:*', 'error');
 var hubiquitusQos = require(__dirname + '/../index');

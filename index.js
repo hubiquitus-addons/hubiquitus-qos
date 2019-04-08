@@ -4,15 +4,12 @@ var hubiquitus = require('hubiquitus-core');
 var logger = hubiquitus.logger('hubiquitus:addons:qos');
 var _ = require('lodash');
 var tv4 = require('tv4');
-var mongo = require('mongodb');
 var MongoClient = require('mongodb').MongoClient;
 var Target = require('./lib/target').Target;
 var schemas = require('./lib/schemas');
 var properties = require('./lib/properties');
-
 var targets = {};
 var db = null;
-
 /**
  * QOS configuration
  * @param {Object|Function} conf
@@ -36,13 +33,13 @@ exports.configure = function (conf, done) {
   logger.info('use configuration', {conf: properties});
 
   /* connection to the database */
-  MongoClient.connect(properties.mongo, null , function(err, _db) {
+  MongoClient.connect(properties.mongo, { useNewUrlParser: true, autoReconnect: true } , function(err, _client) {
     if (err) {
       logger.error('cant connect to database', {conf: properties.mongo, err: err});
       return done && done({code: 'MONGOERR'});
     }
     logger.info('connected to database', {conf: properties.mongo});
-    db = _db;
+    db = _client.db();
     done && done();
   });
 };
@@ -146,7 +143,7 @@ exports.persist = function (from, to, content, headers, done) {
     } else {
       done && done(null, {
         done: function () {
-          collection.remove({_id: id}, function (err) {
+          collection.deleteOne({_id: id}, function (err) {
             if (err) {
               logger.warn('safe message removal error', err);
             }
@@ -232,7 +229,7 @@ function middlewareSafeIn(req, next) {
     }
   };
 
-  collection.updateOne({_id:toPersist._id}, toPersist, {upsert: true}, function (err) {
+  collection.replaceOne({_id:toPersist._id}, toPersist, {upsert: true}, function (err) {
     if (err) {
       logger.warn('safe message queueing error, will not be processed !', err);
       req.reply({code: 'MONGOERR', message: 'couldnt queue message to process, stop processing'});
