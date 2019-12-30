@@ -1,6 +1,6 @@
 {
   "name": "hubiquitus-qos",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "repository": {
     "type": "git",
     "url": "https://git@github.com:hubiquitus-addons/hubiquitus-qos"
@@ -10,16 +10,15 @@
   },
   "dependencies": {
     "commander": "2.1.*",
-    "hubiquitus-core": "~0.10.0",
-    "lodash": "4.5.*",
-    "mongodb": "^3.2",
+    "hubiquitus-core": "^0.10.2",
+    "lodash": "^4.17.15",
+    "mongodb": "^3.4.1",
     "tv4": "^1.2.0"
   },
   "devDependencies": {
-    "async": "^2.6.2",
+    "async": "^2.6.3",
     "chai": "^4.2.0",
-    "mocha": "^4.1.0",
-    "sinon": "^4.5.0"
+    "mocha": "^4.1.0"
   },
   "main": "./index.js"
 }
