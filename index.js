@@ -33,7 +33,7 @@ exports.configure = function (conf, done) {
   logger.info('use configuration', {conf: properties});
 
   /* connection to the database */
-  MongoClient.connect(properties.mongo, { useNewUrlParser: true, autoReconnect: true } , function(err, _client) {
+  MongoClient.connect(properties.mongo, { useNewUrlParser: true, useUnifiedTopology: true } , function(err, _client) {
     if (err) {
       logger.error('cant connect to database', {conf: properties.mongo, err: err});
       return done && done({code: 'MONGOERR'});
