@@ -11,14 +11,17 @@
   "dependencies": {
     "commander": "2.1.*",
     "hubiquitus-core": "^0.10.2",
-    "lodash": "^4.17.20",
-    "mongodb": "^3.6.0",
+    "lodash": "^4.17.21",
+    "mongodb": "^3.7.3",
     "tv4": "^1.2.0"
   },
   "devDependencies": {
-    "async": "^2.6.3",
+    "async": "^2.6.4",
     "chai": "^4.2.0",
-    "mocha": "^4.1.0"
+    "mocha": "^10.1.0"
+  },
+  "scripts": {
+    "test": "mocha test"
   },
   "main": "./index.js"
 }
